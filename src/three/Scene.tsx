@@ -7,6 +7,7 @@ import { VertexPoints } from './VertexPoints'
 import { VertexLabels } from './VertexLabels'
 import { CameraRig } from './CameraRig'
 import { ExportController } from './ExportController'
+import { SectionLayer } from './SectionLayer'
 
 /** The 3D viewport: a single WebGL canvas wired to the store. */
 export function Scene() {
@@ -28,6 +29,7 @@ export function Scene() {
       {display.edges && <EdgesView solid={solid} />}
       {display.vertices && <VertexPoints solid={solid} />}
       {display.labels && <VertexLabels solid={solid} />}
+      <SectionLayer solid={solid} />
 
       <CameraRig />
       <ExportController />

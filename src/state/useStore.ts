@@ -2,7 +2,7 @@
 // toggles, appearance, camera and export settings. UI and the 3D scene both
 // read from here; geometry is recomputed as a pure function of {type, params}.
 import { create } from 'zustand'
-import type { ParamValues, ShapeType } from '../geometry/types'
+import type { ParamValues, ShapeType, Vec3 } from '../geometry/types'
 import { generateSolid, SHAPE_DEFS } from '../geometry/shapes'
 import {
   applyVertexNames,
@@ -10,6 +10,16 @@ import {
   type VertexNameValidation,
 } from '../geometry/rename'
 import type { ExportBackground, ExportScale } from '../export/export'
+import {
+  resolveHostPoint,
+  type SectionHost,
+} from '../geometry/section/constraints'
+import {
+  planeFromPoints,
+  type SectionPlane,
+} from '../geometry/section/plane'
+import { intersectConvexMesh } from '../geometry/section/intersect'
+import { sectionMeshForSolid } from '../geometry/section/mesh'
 
 export type ViewPreset = 'front' | 'top' | 'side' | 'iso'
 export type DisplayKey = 'faces' | 'edges' | 'vertices' | 'labels'
@@ -33,6 +43,37 @@ export interface ExportSettings {
   scale: ExportScale
 }
 
+export interface SectionPoint {
+  readonly id: number
+  readonly host: SectionHost
+}
+
+export interface SectionAppearanceState {
+  color: string
+  opacity: number
+  outlineColor: string
+  outlineWidth: number
+}
+
+export type SectionStatus =
+  | 'needPoints'
+  | 'coincident'
+  | 'collinear'
+  | 'empty'
+  | 'ready'
+  | 'unsupported'
+
+export interface SectionState {
+  enabled: boolean
+  points: readonly SectionPoint[]
+  plane: SectionPlane | null
+  polygon: readonly Vec3[]
+  status: SectionStatus
+  approximate: boolean
+  appearance: SectionAppearanceState
+  nextPointId: number
+}
+
 export interface StoreState {
   shapeType: ShapeType
   /** Parameter values per shape, so switching back restores prior dimensions. */
@@ -49,6 +90,7 @@ export interface StoreState {
   exportSettings: ExportSettings
   /** Bumped to request a PNG capture from the ExportController. */
   exportNonce: number
+  section: SectionState
 
   setShape: (type: ShapeType) => void
   setParam: (key: string, value: number) => void
@@ -65,6 +107,15 @@ export interface StoreState {
   setExportBackground: (background: ExportBackground) => void
   setExportScale: (scale: ExportScale) => void
   requestExport: () => void
+  toggleSectionMode: () => void
+  clearSection: () => void
+  addSectionPoint: (host: SectionHost) => void
+  updateSectionPoint: (id: number, host: SectionHost) => void
+  removeSectionPoint: (id: number) => void
+  setSectionAppearance: <K extends keyof SectionAppearanceState>(
+    key: K,
+    value: SectionAppearanceState[K],
+  ) => void
 }
 
 function initialParamsByShape(): Record<ShapeType, ParamValues> {
@@ -86,6 +137,71 @@ function initialVertexNamesByShape(): Record<
 
 const DEFAULT_VIEW: ViewPreset = 'iso'
 
+const DEFAULT_SECTION_APPEARANCE: SectionAppearanceState = {
+  color: '#f43f5e',
+  opacity: 0.45,
+  outlineColor: '#9f1239',
+  outlineWidth: 3,
+}
+
+function emptySection(
+  enabled = false,
+  appearance = DEFAULT_SECTION_APPEARANCE,
+): SectionState {
+  return {
+    enabled,
+    points: [],
+    plane: null,
+    polygon: [],
+    status: 'needPoints',
+    approximate: false,
+    appearance,
+    nextPointId: 1,
+  }
+}
+
+function deriveSection(
+  type: ShapeType,
+  params: ParamValues,
+  section: SectionState,
+): SectionState {
+  const mesh = sectionMeshForSolid(generateSolid(type, params))
+  if (!mesh) {
+    return {
+      ...section,
+      points: [],
+      plane: null,
+      polygon: [],
+      status: 'unsupported',
+      approximate: false,
+    }
+  }
+
+  const positions = section.points.map((point) =>
+    resolveHostPoint(mesh, point.host),
+  )
+  const planeResult = planeFromPoints(positions)
+  if (!planeResult.ok) {
+    return {
+      ...section,
+      plane: null,
+      polygon: [],
+      status:
+        planeResult.reason === 'tooFew' ? 'needPoints' : planeResult.reason,
+      approximate: mesh.approximate,
+    }
+  }
+
+  const polygon = intersectConvexMesh(mesh, planeResult.plane)
+  return {
+    ...section,
+    plane: planeResult.plane,
+    polygon,
+    status: polygon.length >= 3 ? 'ready' : 'empty',
+    approximate: mesh.approximate,
+  }
+}
+
 export const useStore = create<StoreState>((set, get) => ({
   shapeType: 'cube',
   paramsByShape: initialParamsByShape(),
@@ -106,27 +222,41 @@ export const useStore = create<StoreState>((set, get) => ({
   cameraLocked: false,
   exportSettings: { background: 'transparent', scale: 2 },
   exportNonce: 0,
+  section: emptySection(),
 
   setShape: (type) =>
     set((s) => ({
       shapeType: type,
       viewNonce: s.viewNonce + 1,
+      section: deriveSection(
+        type,
+        s.paramsByShape[type],
+        emptySection(s.section.enabled, s.section.appearance),
+      ),
     })),
   setParam: (key, value) =>
-    set((s) => ({
-      paramsByShape: {
+    set((s) => {
+      const nextParams = {
         ...s.paramsByShape,
         [s.shapeType]: { ...s.paramsByShape[s.shapeType], [key]: value },
-      },
-      ...(key === 'sides'
-        ? {
-            vertexNamesByShape: {
-              ...s.vertexNamesByShape,
-              [s.shapeType]: {},
-            },
-          }
-        : {}),
-    })),
+      }
+      return {
+        paramsByShape: nextParams,
+        section: deriveSection(
+          s.shapeType,
+          nextParams[s.shapeType],
+          emptySection(s.section.enabled, s.section.appearance),
+        ),
+        ...(key === 'sides'
+          ? {
+              vertexNamesByShape: {
+                ...s.vertexNamesByShape,
+                [s.shapeType]: {},
+              },
+            }
+          : {}),
+      }
+    }),
   toggleDisplay: (key) =>
     set((s) => ({ display: { ...s.display, [key]: !s.display[key] } })),
   setAppearance: (key, value) =>
@@ -169,4 +299,67 @@ export const useStore = create<StoreState>((set, get) => ({
   setExportScale: (scale) =>
     set((s) => ({ exportSettings: { ...s.exportSettings, scale } })),
   requestExport: () => set((s) => ({ exportNonce: s.exportNonce + 1 })),
+  toggleSectionMode: () =>
+    set((s) => ({ section: { ...s.section, enabled: !s.section.enabled } })),
+  clearSection: () =>
+    set((s) => ({
+      section: deriveSection(
+        s.shapeType,
+        s.paramsByShape[s.shapeType],
+        emptySection(s.section.enabled, s.section.appearance),
+      ),
+    })),
+  addSectionPoint: (host) =>
+    set((s) => {
+      const mesh = sectionMeshForSolid(
+        generateSolid(s.shapeType, s.paramsByShape[s.shapeType]),
+      )
+      if (!mesh) return s
+      const section: SectionState = {
+        ...s.section,
+        points: [
+          ...s.section.points,
+          { id: s.section.nextPointId, host },
+        ],
+        nextPointId: s.section.nextPointId + 1,
+      }
+      return {
+        section: deriveSection(
+          s.shapeType,
+          s.paramsByShape[s.shapeType],
+          section,
+        ),
+      }
+    }),
+  updateSectionPoint: (id, host) =>
+    set((s) => ({
+      section: deriveSection(
+        s.shapeType,
+        s.paramsByShape[s.shapeType],
+        {
+          ...s.section,
+          points: s.section.points.map((point) =>
+            point.id === id ? { ...point, host } : point,
+          ),
+        },
+      ),
+    })),
+  removeSectionPoint: (id) =>
+    set((s) => ({
+      section: deriveSection(
+        s.shapeType,
+        s.paramsByShape[s.shapeType],
+        {
+          ...s.section,
+          points: s.section.points.filter((point) => point.id !== id),
+        },
+      ),
+    })),
+  setSectionAppearance: (key, value) =>
+    set((s) => ({
+      section: {
+        ...s.section,
+        appearance: { ...s.section.appearance, [key]: value },
+      },
+    })),
 }))

@@ -7,6 +7,7 @@ import { CameraControls } from './CameraControls'
 import { ExportControls } from './ExportControls'
 import { AppearanceControls } from './AppearanceControls'
 import { VertexRenameControls } from './VertexRenameControls'
+import { SectionControls } from './SectionControls'
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -43,6 +44,9 @@ export function ControlPanel() {
       </Section>
       <Section title={strings.panel.naming}>
         <VertexRenameControls />
+      </Section>
+      <Section title={strings.panel.section}>
+        <SectionControls />
       </Section>
       <Section title={strings.panel.camera}>
         <CameraControls />

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   add,
+  clamp,
   cross,
   distance,
   dot,
@@ -40,5 +41,11 @@ describe('vector math', () => {
   it('interpolates linearly', () => {
     expect(lerp([0, 0, 0], [2, 2, 2], 0.5)).toEqual([1, 1, 1])
     expect(lerp([0, 0, 0], [10, 0, 0], 0.25)).toEqual([2.5, 0, 0])
+  })
+
+  it('clamps scalar values', () => {
+    expect(clamp(-2, 0, 1)).toBe(0)
+    expect(clamp(0.4, 0, 1)).toBe(0.4)
+    expect(clamp(3, 0, 1)).toBe(1)
   })
 })

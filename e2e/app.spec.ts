@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test'
 import { readFileSync } from 'node:fs'
+import * as THREE from 'three'
 import { strings } from '../src/ui/strings'
 import { SHAPE_TYPES } from '../src/geometry/shapes'
+import type { Vec3 } from '../src/geometry/types'
 
 /** Fraction of canvas pixels that are non-transparent (i.e. something drawn). */
 async function nonBlankRatio(page: import('@playwright/test').Page) {
@@ -23,6 +25,35 @@ async function canvasDataUrl(page: import('@playwright/test').Page) {
   return await page.evaluate(() =>
     (document.querySelector('canvas') as HTMLCanvasElement).toDataURL(),
   )
+}
+
+async function projectWorldPoint(
+  page: import('@playwright/test').Page,
+  point: Vec3,
+  radius: number,
+) {
+  const box = await page.locator('canvas').boundingBox()
+  if (!box) throw new Error('canvas bounds unavailable')
+
+  const camera = new THREE.PerspectiveCamera(
+    45,
+    box.width / box.height,
+    0.1,
+    1000,
+  )
+  const distance =
+    (radius / Math.sin(THREE.MathUtils.degToRad(45) / 2)) * 1.5
+  camera.position.set(0.7 * distance, 0.6 * distance, 0.7 * distance)
+  camera.up.set(0, 1, 0)
+  camera.lookAt(0, 0, 0)
+  camera.updateProjectionMatrix()
+  camera.updateMatrixWorld()
+
+  const projected = new THREE.Vector3(...point).project(camera)
+  return {
+    x: box.x + ((projected.x + 1) * box.width) / 2,
+    y: box.y + ((1 - projected.y) * box.height) / 2,
+  }
 }
 
 test.beforeEach(async ({ page }) => {
@@ -263,4 +294,128 @@ test('exports a high-resolution PNG', async ({ page }) => {
   const height = buf.readUInt32BE(20)
   expect(Math.abs(width - logical.w * 2)).toBeLessThanOrEqual(2)
   expect(Math.abs(height - logical.h * 2)).toBeLessThanOrEqual(2)
+})
+
+test('builds, drags, and exports an interactive cube section', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: strings.section.enable }).click()
+  await expect(page.getByRole('alert')).toContainText(
+    strings.section.hints.needPoints,
+  )
+
+  const edgePoints: Vec3[] = [
+    [0, -1, 1],
+    [0, 1, 1],
+    [-1, 0, 1],
+  ]
+  for (const point of edgePoints) {
+    const screenPoint = await projectWorldPoint(page, point, Math.sqrt(3))
+    await page.mouse.click(screenPoint.x, screenPoint.y)
+  }
+
+  await expect(page.getByRole('status')).toContainText(
+    strings.section.hints.ready,
+  )
+  await expect(page.getByText(/Точка 1/)).toBeVisible()
+  await page.waitForTimeout(300)
+  const beforeDrag = await canvasDataUrl(page)
+  await expect(page.locator('canvas')).toHaveScreenshot('cube-section.png', {
+    animations: 'disabled',
+  })
+
+  const dragStart = await projectWorldPoint(page, edgePoints[0], Math.sqrt(3))
+  const dragEnd = await projectWorldPoint(
+    page,
+    [0.65, -1, 1],
+    Math.sqrt(3),
+  )
+  await page.mouse.move(dragStart.x, dragStart.y)
+  await page.mouse.down()
+  await page.mouse.move(dragEnd.x, dragEnd.y, { steps: 8 })
+  await page.mouse.up()
+  await page.waitForTimeout(300)
+  expect(await canvasDataUrl(page)).not.toBe(beforeDrag)
+  await expect(page.getByRole('status')).toContainText(
+    strings.section.hints.ready,
+  )
+
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: strings.export.download }).click()
+  const path = await (await downloadPromise).path()
+  const buffer = readFileSync(path)
+  expect(buffer.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a')
+})
+
+test('shows curved approximation and sphere limitation', async ({ page }) => {
+  await page.getByLabel(strings.panel.shape).selectOption('cylinder')
+  await expect(page.getByRole('alert')).toContainText(
+    strings.section.hints.approximate,
+  )
+
+  await page.getByLabel(strings.panel.shape).selectOption('sphere')
+  await expect(page.getByRole('alert')).toContainText(
+    strings.section.hints.unsupported,
+  )
+})
+
+test('builds sections on a pyramid, prism, and cylinder', async ({ page }) => {
+  await page.getByRole('button', { name: strings.section.enable }).click()
+
+  const prismRadius = 2.5 / Math.sqrt(3)
+  const cases: {
+    type: 'pyramid' | 'prism' | 'cylinder'
+    radius: number
+    points: Vec3[]
+  }[] = [
+    {
+      type: 'pyramid',
+      radius: Math.hypot(1.25, 1.5, 1.25),
+      points: [
+        [0, -1.5, 1.25],
+        [-0.625, 0, 0.625],
+        [0.625, 0, 0.625],
+      ],
+    },
+    {
+      type: 'prism',
+      radius: Math.hypot(prismRadius, 1.5),
+      points: [
+        [0, 1.5, 0.7],
+        [-0.6, 1.5, -0.3],
+        [0.6, 1.5, -0.3],
+      ],
+    },
+    {
+      type: 'cylinder',
+      radius: Math.hypot(1.5, 1.5),
+      points: [
+        [0, 1.5, 0],
+        [0.7, 1.5, 0],
+        [0, 1.5, 0.7],
+      ],
+    },
+  ]
+
+  for (const sectionCase of cases) {
+    await page.getByLabel(strings.panel.shape).selectOption(sectionCase.type)
+    await page.waitForTimeout(250)
+    for (const point of sectionCase.points) {
+      const screenPoint = await projectWorldPoint(
+        page,
+        point,
+        sectionCase.radius,
+      )
+      await page.mouse.click(screenPoint.x, screenPoint.y)
+    }
+    await expect(page.getByRole('status')).toContainText(
+      strings.section.hints.ready,
+    )
+    if (sectionCase.type === 'cylinder') {
+      await expect(page.getByRole('status')).toContainText(
+        strings.section.hints.approximate,
+      )
+    }
+    await page.getByRole('button', { name: strings.section.clear }).click()
+  }
 })

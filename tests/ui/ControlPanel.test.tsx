@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { ControlPanel } from '../../src/ui/ControlPanel'
 import { useStore } from '../../src/state/useStore'
 import { strings } from '../../src/ui/strings'
@@ -87,9 +87,7 @@ describe('ControlPanel', () => {
     })
     fireEvent.change(name, { target: { value: 'P' } })
     fireEvent.click(screen.getByText(strings.rename.apply))
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      strings.rename.errors.duplicate,
-    )
+    expect(screen.getByText(strings.rename.errors.duplicate)).toBeInTheDocument()
 
     fireEvent.click(screen.getByText(strings.rename.reset))
     expect(get().vertexNamesByShape.cube).toEqual({})
@@ -117,5 +115,76 @@ describe('ControlPanel', () => {
 
     fireEvent.click(screen.getByText(strings.export.download))
     expect(get().exportNonce).toBe(1)
+  })
+
+  it('enters section mode, shows point state, removes, and clears points', () => {
+    render(<ControlPanel />)
+    fireEvent.click(screen.getByText(strings.section.enable))
+    expect(get().section.enabled).toBe(true)
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      strings.section.hints.needPoints,
+    )
+
+    act(() => {
+      get().addSectionPoint({ kind: 'edge', edgeIndex: 0, t: 0.5 })
+      get().addSectionPoint({ kind: 'edge', edgeIndex: 4, t: 0.25 })
+      get().addSectionPoint({ kind: 'edge', edgeIndex: 9, t: 0.5 })
+    })
+    expect(screen.getByRole('status')).toHaveTextContent(
+      strings.section.hints.ready,
+    )
+    expect(screen.getByText(/Точка 1/)).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByLabelText(`${strings.section.removePoint} 1`),
+    )
+    expect(get().section.points).toHaveLength(2)
+
+    fireEvent.click(screen.getByText(strings.section.clear))
+    expect(get().section.points).toEqual([])
+  })
+
+  it('updates every section appearance control', () => {
+    render(<ControlPanel />)
+    fireEvent.change(
+      screen.getByLabelText(strings.section.appearance.color),
+      { target: { value: '#112233' } },
+    )
+    fireEvent.change(
+      screen.getByLabelText(strings.section.appearance.opacity),
+      { target: { value: '0.6' } },
+    )
+    fireEvent.change(
+      screen.getByLabelText(strings.section.appearance.outlineColor),
+      { target: { value: '#445566' } },
+    )
+    fireEvent.change(
+      screen.getByLabelText(strings.section.appearance.outlineWidth),
+      { target: { value: '5' } },
+    )
+
+    expect(get().section.appearance).toEqual({
+      color: '#112233',
+      opacity: 0.6,
+      outlineColor: '#445566',
+      outlineWidth: 5,
+    })
+  })
+
+  it('shows approximate and unsupported section guidance', () => {
+    render(<ControlPanel />)
+    fireEvent.change(screen.getByLabelText(strings.panel.shape), {
+      target: { value: 'cylinder' },
+    })
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      strings.section.hints.approximate,
+    )
+
+    fireEvent.change(screen.getByLabelText(strings.panel.shape), {
+      target: { value: 'sphere' },
+    })
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      strings.section.hints.unsupported,
+    )
   })
 })

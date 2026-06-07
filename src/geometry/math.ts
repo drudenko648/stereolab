@@ -47,3 +47,7 @@ export function lerp(a: Vec3, b: Vec3, t: number): Vec3 {
     a[2] + (b[2] - a[2]) * t,
   ]
 }
+
+export function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}

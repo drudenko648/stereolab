@@ -3,6 +3,7 @@ import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useStore } from '../state/useStore'
 import { backgroundSettings, exportFilename } from '../export/export'
+import { SECTION_EDITING_GROUP } from './SectionLayer'
 
 /**
  * Captures the WebGL canvas to a PNG when an export is requested. Rendering and
@@ -36,8 +37,11 @@ export function ExportController() {
     const prevClearColor = gl.getClearColor(new THREE.Color())
     const prevClearAlpha = gl.getClearAlpha()
     const prevPixelRatio = gl.getPixelRatio()
+    const editingAffordances = scene.getObjectByName(SECTION_EDITING_GROUP)
+    const editingVisible = editingAffordances?.visible
 
     try {
+      if (editingAffordances) editingAffordances.visible = false
       if (bg.color === null) {
         scene.background = null
         gl.setClearColor(0x000000, 0)
@@ -56,6 +60,9 @@ export function ExportController() {
       gl.setSize(width, height, false)
       scene.background = prevBackground
       gl.setClearColor(prevClearColor, prevClearAlpha)
+      if (editingAffordances && editingVisible !== undefined) {
+        editingAffordances.visible = editingVisible
+      }
       gl.render(scene, camera)
     }
     // Only the export request should trigger a capture.
