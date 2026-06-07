@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   baseRingNames,
+  joinLabel,
   letterName,
   splitLabel,
   subscript,
+  toSubscript,
   topRingNames,
 } from '../../src/geometry/naming'
 
@@ -37,5 +39,22 @@ describe('naming', () => {
     expect(splitLabel('A₁')).toEqual({ base: 'A', sub: '1' })
     expect(splitLabel('D₁')).toEqual({ base: 'D', sub: '1' })
     expect(splitLabel('A₁₂')).toEqual({ base: 'A', sub: '12' })
+  })
+
+  it('converts ordinary digits to subscript glyphs, dropping non-digits', () => {
+    expect(toSubscript('1')).toBe('₁')
+    expect(toSubscript('12')).toBe('₁₂')
+    expect(toSubscript('')).toBe('')
+    expect(toSubscript('a1b2')).toBe('₁₂')
+  })
+
+  it('joins base + subscript and round-trips with splitLabel', () => {
+    expect(joinLabel('A', '1')).toBe('A₁')
+    expect(joinLabel('O', '')).toBe('O')
+    expect(joinLabel('A', '12')).toBe('A₁₂')
+    for (const name of ['A', 'A₁', 'B₁₂', 'S', 'O₁']) {
+      const { base, sub } = splitLabel(name)
+      expect(joinLabel(base, sub)).toBe(name)
+    }
   })
 })

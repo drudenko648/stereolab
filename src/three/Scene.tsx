@@ -8,10 +8,13 @@ import { VertexLabels } from './VertexLabels'
 import { CameraRig } from './CameraRig'
 import { ExportController } from './ExportController'
 import { SectionLayer } from './SectionLayer'
+import { RenameTargets } from './RenameTargets'
+import { LabelEditorOverlay } from './LabelEditorOverlay'
 
 /** The 3D viewport: a single WebGL canvas wired to the store. */
 export function Scene() {
   const display = useStore((s) => s.display)
+  const sectionEnabled = useStore((s) => s.section.enabled)
   const solid = useSolid()
 
   return (
@@ -30,6 +33,10 @@ export function Scene() {
       {display.vertices && <VertexPoints solid={solid} />}
       {display.labels && <VertexLabels solid={solid} />}
       <SectionLayer solid={solid} />
+      {!sectionEnabled && (display.vertices || display.labels) && (
+        <RenameTargets solid={solid} />
+      )}
+      <LabelEditorOverlay solid={solid} />
 
       <CameraRig />
       <ExportController />

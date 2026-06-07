@@ -62,6 +62,9 @@ describe('ControlPanel', () => {
     fireEvent.change(screen.getByLabelText(strings.appearance.labelColor), {
       target: { value: '#334455' },
     })
+    fireEvent.change(screen.getByLabelText(strings.appearance.labelSize), {
+      target: { value: '1.5' },
+    })
 
     expect(get().appearance).toEqual({
       figureColor: '#123456',
@@ -72,6 +75,7 @@ describe('ControlPanel', () => {
       vertexColor: '#fedcba',
       vertexSize: 0.14,
       labelColor: '#334455',
+      labelSize: 1.5,
     })
   })
 
@@ -91,6 +95,18 @@ describe('ControlPanel', () => {
 
     fireEvent.click(screen.getByText(strings.rename.reset))
     expect(get().vertexNamesByShape.cube).toEqual({})
+  })
+
+  it('renames a vertex with a subscript via the index field', () => {
+    render(<ControlPanel />)
+    fireEvent.change(screen.getByLabelText(strings.rename.name), {
+      target: { value: 'A' },
+    })
+    fireEvent.change(screen.getByLabelText(strings.rename.subscript), {
+      target: { value: '2' },
+    })
+    fireEvent.click(screen.getByText(strings.rename.apply))
+    expect(get().vertexNamesByShape.cube).toEqual({ 0: 'A₂' })
   })
 
   it('applies a quick view and toggles the lock', () => {
@@ -162,12 +178,22 @@ describe('ControlPanel', () => {
       screen.getByLabelText(strings.section.appearance.outlineWidth),
       { target: { value: '5' } },
     )
+    fireEvent.change(
+      screen.getByLabelText(strings.section.appearance.labelColor),
+      { target: { value: '#778899' } },
+    )
+    fireEvent.change(
+      screen.getByLabelText(strings.section.appearance.labelSize),
+      { target: { value: '1.4' } },
+    )
 
     expect(get().section.appearance).toEqual({
       color: '#112233',
       opacity: 0.6,
       outlineColor: '#445566',
       outlineWidth: 5,
+      labelColor: '#778899',
+      labelSize: 1.4,
     })
   })
 

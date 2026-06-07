@@ -12,6 +12,7 @@ export function CameraControls() {
   const setView = useStore((s) => s.setView)
   const resetView = useStore((s) => s.resetView)
   const toggleLock = useStore((s) => s.toggleLock)
+  const requestZoom = useStore((s) => s.requestZoom)
   const locked = useStore((s) => s.cameraLocked)
 
   return (
@@ -27,6 +28,24 @@ export function CameraControls() {
             {strings.camera[preset]}
           </button>
         ))}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          className={BTN}
+          aria-label={strings.camera.zoomIn}
+          onClick={() => requestZoom(0.8)}
+        >
+          +
+        </button>
+        <button
+          type="button"
+          className={BTN}
+          aria-label={strings.camera.zoomOut}
+          onClick={() => requestZoom(1.25)}
+        >
+          −
+        </button>
       </div>
       <button type="button" className={BTN} onClick={resetView}>
         {strings.camera.reset}

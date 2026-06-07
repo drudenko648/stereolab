@@ -1,128 +1,45 @@
-import { Billboard, Text } from '@react-three/drei'
+import { Billboard } from '@react-three/drei'
 import type { Solid, Vec3 } from '../geometry/types'
 import { length, normalize, scale } from '../geometry/math'
-import { splitLabel } from '../geometry/naming'
 import { useStore } from '../state/useStore'
+import { LabelText } from './LabelText'
 
 const LABEL_OFFSET = 0.32
 const BASE_SIZE = 0.3
-const SUB_SIZE = 0.19
-const OUTLINE = 0.018
-
-function showThroughSurfaces(text: {
-  renderOrder: number
-  material: {
-    depthTest: boolean
-    depthWrite: boolean
-    opacity: number
-    transparent: boolean
-  }
-}): void {
-  text.renderOrder = 10
-  text.material.depthTest = false
-  text.material.depthWrite = false
-  text.material.opacity = 1
-  text.material.transparent = true
-}
 
 /**
- * In-canvas vertex labels. Rendered with drei <Text> (troika) inside a
- * <Billboard> so they always face the camera AND are captured by toDataURL —
- * a DOM <Html> overlay would be missing from the exported PNG.
+ * In-canvas vertex labels. Each label is a <Billboard> (always faces the camera
+ * and is captured by toDataURL — a DOM <Html> overlay would be missing from the
+ * exported PNG) wrapping the shared <LabelText>.
  *
- * Subscripts (A₁) are drawn as a separate, smaller, lowered digit rather than a
- * Unicode subscript glyph, because the default font lacks ₀–₉ glyphs.
+ * The group is keyed by solid.type so switching shape never reuses a previous
+ * shape's label instances (which left A/B unrendered after a cylinder switch).
  */
 export function VertexLabels({ solid }: { solid: Solid }) {
   const color = useStore((s) => s.appearance.labelColor)
+  const labelSize = useStore((s) => s.appearance.labelSize)
   const showThrough = solid.surface !== undefined
+  const size = BASE_SIZE * labelSize
 
   return (
-    <group>
+    <group key={solid.type}>
       {solid.vertices.map((vertex) => {
         const p = vertex.position
         // Push the label slightly outward from the centre so it clears the body.
         const dir: Vec3 = length(p) === 0 ? [0, 1, 0] : normalize(p)
         const offset = scale(dir, LABEL_OFFSET)
-        const { base, sub } = splitLabel(vertex.name)
         return (
           <Billboard
             key={vertex.id}
             position={[p[0] + offset[0], p[1] + offset[1], p[2] + offset[2]]}
             renderOrder={showThrough ? 10 : 0}
           >
-            {sub === '' ? (
-              <Text
-                fontSize={BASE_SIZE}
-                color={color}
-                anchorX="center"
-                anchorY="middle"
-                outlineWidth={OUTLINE}
-                outlineColor="#ffffff"
-                depthOffset={showThrough ? -10 : 0}
-                onSync={showThrough ? showThroughSurfaces : undefined}
-                renderOrder={showThrough ? 10 : 0}
-              >
-                {base}
-                {showThrough && (
-                  <meshBasicMaterial
-                    attach="material"
-                    color={color}
-                    depthTest={false}
-                    depthWrite={false}
-                    transparent
-                  />
-                )}
-              </Text>
-            ) : (
-              <>
-                <Text
-                  fontSize={BASE_SIZE}
-                  color={color}
-                  anchorX="right"
-                  anchorY="middle"
-                  outlineWidth={OUTLINE}
-                  outlineColor="#ffffff"
-                  depthOffset={showThrough ? -10 : 0}
-                  onSync={showThrough ? showThroughSurfaces : undefined}
-                  renderOrder={showThrough ? 10 : 0}
-                >
-                  {base}
-                  {showThrough && (
-                    <meshBasicMaterial
-                      attach="material"
-                      color={color}
-                      depthTest={false}
-                      depthWrite={false}
-                      transparent
-                    />
-                  )}
-                </Text>
-                <Text
-                  position={[0.03, -0.08, 0]}
-                  fontSize={SUB_SIZE}
-                  color={color}
-                  anchorX="left"
-                  anchorY="middle"
-                  outlineWidth={OUTLINE}
-                  outlineColor="#ffffff"
-                  depthOffset={showThrough ? -10 : 0}
-                  onSync={showThrough ? showThroughSurfaces : undefined}
-                  renderOrder={showThrough ? 10 : 0}
-                >
-                  {sub}
-                  {showThrough && (
-                    <meshBasicMaterial
-                      attach="material"
-                      color={color}
-                      depthTest={false}
-                      depthWrite={false}
-                      transparent
-                    />
-                  )}
-                </Text>
-              </>
-            )}
+            <LabelText
+              name={vertex.name}
+              color={color}
+              size={size}
+              showThrough={showThrough}
+            />
           </Billboard>
         )
       })}

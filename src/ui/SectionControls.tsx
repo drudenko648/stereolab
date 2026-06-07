@@ -96,6 +96,20 @@ export function SectionControls() {
           step={0.5}
           onChange={(value) => setAppearance('outlineWidth', value)}
         />
+        <ColorControl
+          label={strings.section.appearance.labelColor}
+          value={section.appearance.labelColor}
+          onChange={(value) => setAppearance('labelColor', value)}
+        />
+        <RangeControl
+          label={strings.section.appearance.labelSize}
+          value={section.appearance.labelSize}
+          displayValue={`${Math.round(section.appearance.labelSize * 100)}%`}
+          min={0.5}
+          max={2}
+          step={0.1}
+          onChange={(value) => setAppearance('labelSize', value)}
+        />
       </div>
     </div>
   )

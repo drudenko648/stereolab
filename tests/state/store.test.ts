@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { useStore } from '../../src/state/useStore'
+import { generateSolid } from '../../src/geometry/shapes'
+import { sectionMeshForSolid } from '../../src/geometry/section/mesh'
+import { resolveHostPoint } from '../../src/geometry/section/constraints'
+import { signedDistance } from '../../src/geometry/section/plane'
 
 const get = () => useStore.getState()
+
+const cubeMesh = () =>
+  sectionMeshForSolid(generateSolid('cube', get().paramsByShape.cube))!
 
 describe('store', () => {
   it('starts on the cube with everything visible', () => {
@@ -64,6 +71,7 @@ describe('store', () => {
     get().setAppearance('vertexColor', '#fedcba')
     get().setAppearance('vertexSize', 0.14)
     get().setAppearance('labelColor', '#334455')
+    get().setAppearance('labelSize', 1.5)
 
     expect(get().appearance).toEqual({
       figureColor: '#123456',
@@ -74,6 +82,7 @@ describe('store', () => {
       vertexColor: '#fedcba',
       vertexSize: 0.14,
       labelColor: '#334455',
+      labelSize: 1.5,
     })
   })
 
@@ -113,6 +122,26 @@ describe('store', () => {
     expect(get().cameraLocked).toBe(false)
     get().toggleLock()
     expect(get().cameraLocked).toBe(true)
+  })
+
+  it('records zoom requests with a bumped nonce', () => {
+    expect(get().zoomNonce).toBe(0)
+    get().requestZoom(0.8)
+    expect(get().zoomFactor).toBe(0.8)
+    expect(get().zoomNonce).toBe(1)
+    get().requestZoom(1.25)
+    expect(get().zoomFactor).toBe(1.25)
+    expect(get().zoomNonce).toBe(2)
+  })
+
+  it('tracks the in-canvas label editor target', () => {
+    expect(get().editing).toBeNull()
+    get().startEditing({ kind: 'vertex', id: 2 })
+    expect(get().editing).toEqual({ kind: 'vertex', id: 2 })
+    get().startEditing({ kind: 'sectionVertex', index: 1 })
+    expect(get().editing).toEqual({ kind: 'sectionVertex', index: 1 })
+    get().stopEditing()
+    expect(get().editing).toBeNull()
   })
 
   it('updates export settings and requests exports', () => {
@@ -181,6 +210,74 @@ describe('store', () => {
     expect(get().section.polygon).toEqual(polygon)
   })
 
+  it('toggles a section point off when clicked at (or near) its spot', () => {
+    get().addSectionPoint({ kind: 'edge', edgeIndex: 0, t: 0.5 })
+    expect(get().section.points).toHaveLength(1)
+    // Clicking the exact same spot removes it instead of duplicating.
+    get().addSectionPoint({ kind: 'edge', edgeIndex: 0, t: 0.5 })
+    expect(get().section.points).toHaveLength(0)
+
+    get().addSectionPoint({ kind: 'edge', edgeIndex: 0, t: 0.5 })
+    // Within the dedup radius (edge length 2, so 0.05 → 0.1 world units) → removed.
+    get().addSectionPoint({ kind: 'edge', edgeIndex: 0, t: 0.55 })
+    expect(get().section.points).toHaveLength(0)
+
+    get().addSectionPoint({ kind: 'edge', edgeIndex: 0, t: 0.2 })
+    // Far enough apart (0.7 → 1.4 world units) → kept as a second point.
+    get().addSectionPoint({ kind: 'edge', edgeIndex: 0, t: 0.9 })
+    expect(get().section.points).toHaveLength(2)
+  })
+
+  it('drops points that miss the section plane when editing finishes', () => {
+    get().toggleSectionMode()
+    get().addSectionPoint({ kind: 'edge', edgeIndex: 0, t: 0.5 })
+    get().addSectionPoint({ kind: 'edge', edgeIndex: 4, t: 0.25 })
+    get().addSectionPoint({ kind: 'edge', edgeIndex: 9, t: 0.5 })
+    const plane = get().section.plane!
+    const polygon = get().section.polygon
+
+    // A cube vertex that is clearly off the cutting plane.
+    const mesh = cubeMesh()
+    const offVertex = mesh.vertices.findIndex(
+      (v) => Math.abs(signedDistance(plane, v)) > 0.1,
+    )
+    get().addSectionPoint({ kind: 'vertex', vertexIndex: offVertex })
+    expect(get().section.points).toHaveLength(4)
+
+    get().toggleSectionMode()
+    expect(get().section.enabled).toBe(false)
+    expect(get().section.points).toHaveLength(3)
+    expect(get().section.polygon).toEqual(polygon)
+    for (const point of get().section.points) {
+      expect(
+        Math.abs(signedDistance(plane, resolveHostPoint(mesh, point.host))),
+      ).toBeLessThan(1e-6)
+    }
+  })
+
+  it('names section corners with validation', () => {
+    get().addSectionPoint({ kind: 'edge', edgeIndex: 0, t: 0.5 })
+    get().addSectionPoint({ kind: 'edge', edgeIndex: 4, t: 0.25 })
+    get().addSectionPoint({ kind: 'edge', edgeIndex: 9, t: 0.5 })
+    expect(get().section.polygon.length).toBeGreaterThanOrEqual(3)
+
+    expect(get().setSectionVertexName(0, ' M ')).toEqual({
+      ok: true,
+      value: 'M',
+    })
+    expect(get().section.vertexNames[0]).toBe('M')
+    // Corner 0 is now "M", so naming another corner "M" is rejected.
+    expect(get().setSectionVertexName(1, 'M')).toEqual({
+      ok: false,
+      reason: 'duplicate',
+    })
+    expect(get().setSectionVertexName(1, 'K')).toEqual({ ok: true, value: 'K' })
+    expect(get().section.vertexNames[1]).toBe('K')
+
+    get().clearSection()
+    expect(get().section.vertexNames).toEqual({})
+  })
+
   it('tracks section-point dragging independently from section mode', () => {
     get().toggleSectionMode()
     get().setSectionPointDragging(true)
@@ -192,8 +289,13 @@ describe('store', () => {
   })
 
   it('reports coincident and collinear point sets without a polygon', () => {
-    for (let index = 0; index < 3; index++) {
-      get().addSectionPoint({ kind: 'edge', edgeIndex: 0, t: 0.5 })
+    // Clicking the same spot now toggles, so force coincidence by dragging two
+    // points onto a third via updateSectionPoint.
+    get().addSectionPoint({ kind: 'edge', edgeIndex: 0, t: 0.5 })
+    get().addSectionPoint({ kind: 'edge', edgeIndex: 4, t: 0.25 })
+    get().addSectionPoint({ kind: 'edge', edgeIndex: 9, t: 0.5 })
+    for (const point of get().section.points.slice(1)) {
+      get().updateSectionPoint(point.id, { kind: 'edge', edgeIndex: 0, t: 0.5 })
     }
     expect(get().section.status).toBe('coincident')
     expect(get().section.polygon).toEqual([])
@@ -231,11 +333,15 @@ describe('store', () => {
     get().setSectionAppearance('opacity', 0.6)
     get().setSectionAppearance('outlineColor', '#445566')
     get().setSectionAppearance('outlineWidth', 5)
+    get().setSectionAppearance('labelColor', '#778899')
+    get().setSectionAppearance('labelSize', 1.4)
     expect(get().section.appearance).toEqual({
       color: '#112233',
       opacity: 0.6,
       outlineColor: '#445566',
       outlineWidth: 5,
+      labelColor: '#778899',
+      labelSize: 1.4,
     })
   })
 })

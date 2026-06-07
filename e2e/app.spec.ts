@@ -88,6 +88,37 @@ test('renders every Stage 2 shape distinctly', async ({ page }) => {
   expect(seen.size).toBe(SHAPE_TYPES.length)
 })
 
+test('keeps base vertices after switching from a curved solid', async ({
+  page,
+}) => {
+  // Regression: switching cylinder → a polygon-base shape used to drop the
+  // first two base vertices (A, B). The image reached via the cylinder must
+  // match a directly-rendered prism.
+  await page.getByLabel(strings.panel.shape).selectOption('prism')
+  await page.waitForTimeout(400)
+  const directPrism = await canvasDataUrl(page)
+
+  await page.getByLabel(strings.panel.shape).selectOption('cylinder')
+  await page.waitForTimeout(400)
+  await page.getByLabel(strings.panel.shape).selectOption('prism')
+  await page.waitForTimeout(400)
+  const viaCylinder = await canvasDataUrl(page)
+
+  expect(viaCylinder).toBe(directPrism)
+})
+
+test('zoom buttons change the framing', async ({ page }) => {
+  const before = await canvasDataUrl(page)
+  await page.getByRole('button', { name: strings.camera.zoomIn }).click()
+  await page.waitForTimeout(300)
+  const zoomedIn = await canvasDataUrl(page)
+  expect(zoomedIn).not.toBe(before)
+
+  await page.getByRole('button', { name: strings.camera.zoomOut }).click()
+  await page.waitForTimeout(300)
+  expect(await canvasDataUrl(page)).not.toBe(zoomedIn)
+})
+
 test('captures visual snapshots of every new solid', async ({ page }) => {
   const newShapes = [
     'cylinder',

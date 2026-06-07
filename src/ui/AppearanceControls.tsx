@@ -131,6 +131,15 @@ export function AppearanceControls() {
         value={appearance.labelColor}
         onChange={(value) => setAppearance('labelColor', value)}
       />
+      <RangeControl
+        label={strings.appearance.labelSize}
+        value={appearance.labelSize}
+        displayValue={`${Math.round(appearance.labelSize * 100)}%`}
+        min={0.5}
+        max={2}
+        step={0.1}
+        onChange={(value) => setAppearance('labelSize', value)}
+      />
     </div>
   )
 }

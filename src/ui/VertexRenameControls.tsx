@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import type { Solid } from '../geometry/types'
-import {
-  MAX_VERTEX_NAME_LENGTH,
-  type VertexNameError,
-} from '../geometry/rename'
+import { type VertexNameError } from '../geometry/rename'
+import { joinLabel, splitLabel } from '../geometry/naming'
 import { generateSolid } from '../geometry/shapes'
 import { useSolid } from '../state/useSolid'
 import { useStore } from '../state/useStore'
+import { NameFields } from './NameFields'
 import { strings } from './strings'
 
 /** Edit one displayed point name and reset the current solid to auto-naming. */
@@ -39,16 +38,24 @@ function VertexRenameEditor({
     solid.vertices.find((vertex) => vertex.id === selectedId) ??
     solid.vertices[0]
   const selectedName = selected?.name ?? ''
-  const [draft, setDraft] = useState(selectedName)
+  const initial = splitLabel(selectedName)
+  const [base, setBase] = useState(initial.base)
+  const [sub, setSub] = useState(initial.sub)
   const [error, setError] = useState<VertexNameError | null>(null)
 
   if (!selected) return null
 
+  const loadFromName = (name: string) => {
+    const parts = splitLabel(name)
+    setBase(parts.base)
+    setSub(parts.sub)
+    setError(null)
+  }
+
   const apply = () => {
-    const result = renameVertex(selected.id, draft)
+    const result = renameVertex(selected.id, joinLabel(base, sub))
     if (result.ok) {
-      setDraft(result.value)
-      setError(null)
+      loadFromName(result.value)
     } else {
       setError(result.reason)
     }
@@ -60,8 +67,7 @@ function VertexRenameEditor({
       autoSolid.vertices.find((vertex) => vertex.id === selected.id)?.name ??
       autoSolid.vertices[0]?.name ??
       ''
-    setDraft(autoName)
-    setError(null)
+    loadFromName(autoName)
   }
 
   return (
@@ -75,8 +81,7 @@ function VertexRenameEditor({
             const id = Number(event.target.value)
             const vertex = solid.vertices.find((item) => item.id === id)
             setSelectedId(id)
-            setDraft(vertex?.name ?? '')
-            setError(null)
+            loadFromName(vertex?.name ?? '')
           }}
           className="min-w-20 rounded border border-slate-300 bg-white px-2 py-1"
         >
@@ -87,22 +92,19 @@ function VertexRenameEditor({
           ))}
         </select>
       </label>
-      <label className="flex flex-col gap-1 text-sm">
-        <span>{strings.rename.name}</span>
-        <input
-          aria-label={strings.rename.name}
-          value={draft}
-          maxLength={MAX_VERTEX_NAME_LENGTH}
-          onChange={(event) => {
-            setDraft(event.target.value)
-            setError(null)
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') apply()
-          }}
-          className="rounded border border-slate-300 px-2 py-1.5"
-        />
-      </label>
+      <NameFields
+        base={base}
+        sub={sub}
+        onBase={(value) => {
+          setBase(value)
+          setError(null)
+        }}
+        onSub={(value) => {
+          setSub(value)
+          setError(null)
+        }}
+        onSubmit={apply}
+      />
       {error && (
         <p role="alert" className="text-xs text-red-700">
           {strings.rename.errors[error]}

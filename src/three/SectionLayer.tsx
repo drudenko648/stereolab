@@ -1,7 +1,8 @@
-import { Billboard, Line, Text } from '@react-three/drei'
+import { Billboard, Line } from '@react-three/drei'
 import type { ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo, useState } from 'react'
 import * as THREE from 'three'
+import { LabelText } from './LabelText'
 import {
   edgeHostFromPoint,
   faceHostFromPoint,
@@ -50,15 +51,21 @@ export function SectionLayer({ solid }: { solid: Solid }) {
   )
 }
 
+const SECTION_LABEL_BASE = 0.22
+
 function SectionPolygon({
   points,
 }: {
   points: readonly Vec3[]
 }) {
   const appearance = useStore((state) => state.section.appearance)
+  const vertexNames = useStore((state) => state.section.vertexNames)
+  const enabled = useStore((state) => state.section.enabled)
+  const startEditing = useStore((state) => state.startEditing)
   const geometry = useMemo(() => polygonGeometry(points), [points])
   useEffect(() => () => geometry.dispose(), [geometry])
   const closedPoints = [...points, points[0]]
+  const labelSize = SECTION_LABEL_BASE * appearance.labelSize
 
   return (
     <group renderOrder={20}>
@@ -80,27 +87,32 @@ function SectionPolygon({
         renderOrder={21}
       />
       {points.map((point, index) => (
-        <Billboard key={index} position={v3(point)} renderOrder={22}>
-          <Text
-            position={[0.12, 0.12, 0]}
-            fontSize={0.22}
-            color={appearance.outlineColor}
-            outlineWidth={0.018}
-            outlineColor="#ffffff"
-            anchorX="left"
-            anchorY="bottom"
-            renderOrder={22}
-          >
-            {`P${index + 1}`}
-            <meshBasicMaterial
-              attach="material"
-              color={appearance.outlineColor}
-              depthTest={false}
-              depthWrite={false}
-              transparent
-            />
-          </Text>
-        </Billboard>
+        <group key={index}>
+          <Billboard position={v3(point)} renderOrder={22}>
+            <group position={[0.12, 0.12, 0]}>
+              <LabelText
+                name={vertexNames[index] ?? `P${index + 1}`}
+                color={appearance.labelColor}
+                size={labelSize}
+                showThrough
+              />
+            </group>
+          </Billboard>
+          {/* Invisible double-click target to rename this corner. Only when not
+              editing, so it never competes with point placement/dragging. */}
+          {!enabled && (
+            <mesh
+              position={v3(point)}
+              onDoubleClick={(event) => {
+                event.stopPropagation()
+                startEditing({ kind: 'sectionVertex', index })
+              }}
+            >
+              <sphereGeometry args={[0.12, 12, 12]} />
+              <meshBasicMaterial colorWrite={false} depthWrite={false} />
+            </mesh>
+          )}
+        </group>
       ))}
     </group>
   )

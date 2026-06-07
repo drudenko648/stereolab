@@ -56,12 +56,15 @@ const ru = {
     vertexColor: 'Цвет вершин',
     vertexSize: 'Размер вершин',
     labelColor: 'Цвет обозначений',
+    labelSize: 'Размер обозначений',
   },
   rename: {
     vertex: 'Вершина',
     name: 'Новое обозначение',
+    subscript: 'Индекс',
     apply: 'Применить',
     reset: 'Сбросить',
+    cancel: 'Отмена',
     errors: {
       empty: 'Обозначение не может быть пустым.',
       tooLong: 'Обозначение слишком длинное.',
@@ -94,6 +97,8 @@ const ru = {
       opacity: 'Непрозрачность сечения',
       outlineColor: 'Цвет контура',
       outlineWidth: 'Толщина контура',
+      labelColor: 'Цвет надписей',
+      labelSize: 'Размер надписей',
     },
   },
   camera: {
@@ -105,6 +110,8 @@ const ru = {
     lock: 'Зафиксировать вид',
     unlock: 'Разблокировать вид',
     locked: 'Вид зафиксирован',
+    zoomIn: 'Приблизить',
+    zoomOut: 'Отдалить',
   },
   export: {
     background: 'Фон',

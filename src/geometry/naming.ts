@@ -56,3 +56,18 @@ export function splitLabel(name: string): { base: string; sub: string } {
   }
   return { base, sub }
 }
+
+/** Convert a string of ordinary digits to subscript glyphs, dropping non-digits. */
+export function toSubscript(digits: string): string {
+  let out = ''
+  for (const ch of digits) {
+    const value = Number(ch)
+    if (ch >= '0' && ch <= '9') out += SUBSCRIPT_DIGITS[value]
+  }
+  return out
+}
+
+/** Combine a base label with subscript digits into a full name, e.g. ("A","1") → "A₁". */
+export function joinLabel(base: string, subDigits: string): string {
+  return base + toSubscript(subDigits)
+}

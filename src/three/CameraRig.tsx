@@ -17,6 +17,8 @@ const VIEW_DIRECTION: Record<ViewPreset, Vec3> = {
 const DEFAULT_UP: Vec3 = [0, 1, 0]
 const TOP_UP: Vec3 = [0, 0, -1]
 const FRAME_MARGIN = 1.5
+const MIN_ZOOM_DISTANCE = 0.5
+const MAX_ZOOM_DISTANCE = 100
 
 /**
  * OrbitControls plus quick-view presets and a lock toggle. Presets are applied
@@ -30,6 +32,8 @@ export function CameraRig() {
   const view = useStore((s) => s.view)
   const viewNonce = useStore((s) => s.viewNonce)
   const locked = useStore((s) => s.cameraLocked)
+  const zoomFactor = useStore((s) => s.zoomFactor)
+  const zoomNonce = useStore((s) => s.zoomNonce)
   const sectionPointDragging = useStore((s) => s.section.draggingPoint)
 
   // Keep the latest framing radius in a ref so adjusting dimensions does not
@@ -45,6 +49,16 @@ export function CameraRig() {
     applyView(camera, controlsRef.current, view, radiusRef.current)
     // viewNonce drives re-application even when the preset is unchanged.
   }, [camera, view, viewNonce])
+
+  // The +/- zoom buttons bump zoomNonce; dolly the camera toward/away from the
+  // target. Skipped when locked so a frozen viewpoint stays frozen.
+  const lastZoom = useRef(zoomNonce)
+  useEffect(() => {
+    if (zoomNonce === lastZoom.current) return
+    lastZoom.current = zoomNonce
+    if (locked) return
+    applyZoom(camera, controlsRef.current, zoomFactor)
+  }, [camera, locked, zoomFactor, zoomNonce])
 
   return (
     <OrbitControls
@@ -74,4 +88,23 @@ function applyView(
     controls.target.set(0, 0, 0)
     controls.update()
   }
+}
+
+/** Dolly the camera toward (factor<1) or away from (factor>1) the orbit target. */
+function applyZoom(
+  camera: THREE.PerspectiveCamera,
+  controls: ComponentRef<typeof OrbitControls> | null,
+  factor: number,
+): void {
+  const target = controls ? controls.target : new THREE.Vector3(0, 0, 0)
+  const offset = camera.position.clone().sub(target)
+  const distance = THREE.MathUtils.clamp(
+    offset.length() * factor,
+    MIN_ZOOM_DISTANCE,
+    MAX_ZOOM_DISTANCE,
+  )
+  offset.setLength(distance)
+  camera.position.copy(target).add(offset)
+  camera.updateProjectionMatrix()
+  if (controls) controls.update()
 }

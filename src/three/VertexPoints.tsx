@@ -17,8 +17,11 @@ export function VertexPoints({ solid }: { solid: Solid }) {
   )
   useEffect(() => () => geometry.dispose(), [geometry])
 
+  // Keyed by solid.type so switching shape remounts the vertex meshes rather
+  // than reusing the previous shape's instances (which left A/B unrendered
+  // after switching away from the cylinder).
   return (
-    <group>
+    <group key={solid.type}>
       {solid.vertices.map((vertex) => (
         <mesh
           key={vertex.id}

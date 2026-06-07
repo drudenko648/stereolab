@@ -16,10 +16,12 @@ import {
 } from '../geometry/section/constraints'
 import {
   planeFromPoints,
+  signedDistance,
   type SectionPlane,
 } from '../geometry/section/plane'
 import { intersectConvexMesh } from '../geometry/section/intersect'
 import { sectionMeshForSolid } from '../geometry/section/mesh'
+import { distance } from '../geometry/math'
 
 export type ViewPreset = 'front' | 'top' | 'side' | 'iso'
 export type DisplayKey = 'faces' | 'edges' | 'vertices' | 'labels'
@@ -36,6 +38,8 @@ export interface AppearanceState {
   vertexColor: string
   vertexSize: number
   labelColor: string
+  /** Multiplier applied to the base vertex-label font size. */
+  labelSize: number
 }
 
 export interface ExportSettings {
@@ -53,7 +57,15 @@ export interface SectionAppearanceState {
   opacity: number
   outlineColor: string
   outlineWidth: number
+  labelColor: string
+  /** Multiplier applied to the base section-corner label font size. */
+  labelSize: number
 }
+
+/** Which label is currently being edited via the in-canvas floating editor. */
+export type EditingTarget =
+  | { readonly kind: 'vertex'; readonly id: number }
+  | { readonly kind: 'sectionVertex'; readonly index: number }
 
 export type SectionStatus =
   | 'needPoints'
@@ -72,6 +84,8 @@ export interface SectionState {
   status: SectionStatus
   approximate: boolean
   appearance: SectionAppearanceState
+  /** Custom names for section corners, keyed by polygon-vertex index. */
+  vertexNames: Record<number, string>
   nextPointId: number
 }
 
@@ -87,11 +101,16 @@ export interface StoreState {
   view: ViewPreset
   viewNonce: number
   cameraLocked: boolean
+  /** Last requested zoom factor, applied whenever zoomNonce changes. */
+  zoomFactor: number
+  zoomNonce: number
 
   exportSettings: ExportSettings
   /** Bumped to request a PNG capture from the ExportController. */
   exportNonce: number
   section: SectionState
+  /** Label currently open in the in-canvas floating editor, if any. */
+  editing: EditingTarget | null
 
   setShape: (type: ShapeType) => void
   setParam: (key: string, value: number) => void
@@ -105,6 +124,7 @@ export interface StoreState {
   setView: (preset: ViewPreset) => void
   resetView: () => void
   toggleLock: () => void
+  requestZoom: (factor: number) => void
   setExportBackground: (background: ExportBackground) => void
   setExportScale: (scale: ExportScale) => void
   requestExport: () => void
@@ -118,6 +138,9 @@ export interface StoreState {
     key: K,
     value: SectionAppearanceState[K],
   ) => void
+  setSectionVertexName: (index: number, name: string) => VertexNameValidation
+  startEditing: (target: EditingTarget) => void
+  stopEditing: () => void
 }
 
 function initialParamsByShape(): Record<ShapeType, ParamValues> {
@@ -139,11 +162,18 @@ function initialVertexNamesByShape(): Record<
 
 const DEFAULT_VIEW: ViewPreset = 'iso'
 
+/** Clicking within this distance of an existing section point removes it. */
+const SECTION_DEDUP_RADIUS = 0.15
+/** A placed point counts as "on the section" if within this of the plane. */
+const SECTION_ON_PLANE_EPSILON = 1e-6
+
 const DEFAULT_SECTION_APPEARANCE: SectionAppearanceState = {
   color: '#f43f5e',
   opacity: 0.45,
   outlineColor: '#9f1239',
   outlineWidth: 3,
+  labelColor: '#9f1239',
+  labelSize: 1,
 }
 
 function emptySection(
@@ -159,6 +189,7 @@ function emptySection(
     status: 'needPoints',
     approximate: false,
     appearance,
+    vertexNames: {},
     nextPointId: 1,
   }
 }
@@ -219,18 +250,23 @@ export const useStore = create<StoreState>((set, get) => ({
     vertexColor: '#1b2330',
     vertexSize: 0.03,
     labelColor: '#0f172a',
+    labelSize: 1,
   },
   view: DEFAULT_VIEW,
   viewNonce: 0,
   cameraLocked: false,
+  zoomFactor: 1,
+  zoomNonce: 0,
   exportSettings: { background: 'transparent', scale: 2 },
   exportNonce: 0,
   section: emptySection(),
+  editing: null,
 
   setShape: (type) =>
     set((s) => ({
       shapeType: type,
       viewNonce: s.viewNonce + 1,
+      editing: null,
       section: deriveSection(
         type,
         s.paramsByShape[type],
@@ -297,19 +333,49 @@ export const useStore = create<StoreState>((set, get) => ({
   resetView: () =>
     set((s) => ({ view: DEFAULT_VIEW, viewNonce: s.viewNonce + 1 })),
   toggleLock: () => set((s) => ({ cameraLocked: !s.cameraLocked })),
+  requestZoom: (factor) =>
+    set((s) => ({ zoomFactor: factor, zoomNonce: s.zoomNonce + 1 })),
   setExportBackground: (background) =>
     set((s) => ({ exportSettings: { ...s.exportSettings, background } })),
   setExportScale: (scale) =>
     set((s) => ({ exportSettings: { ...s.exportSettings, scale } })),
   requestExport: () => set((s) => ({ exportNonce: s.exportNonce + 1 })),
   toggleSectionMode: () =>
-    set((s) => ({
-      section: {
-        ...s.section,
-        enabled: !s.section.enabled,
-        draggingPoint: false,
-      },
-    })),
+    set((s) => {
+      const finishing = s.section.enabled
+      // On finishing, drop points that don't lie on the section plane: only the
+      // first three define the plane, so extra points placed afterwards that
+      // miss it never appear in the section and shouldn't clutter the list.
+      if (finishing && s.section.plane) {
+        const mesh = sectionMeshForSolid(
+          generateSolid(s.shapeType, s.paramsByShape[s.shapeType]),
+        )
+        if (mesh) {
+          const plane = s.section.plane
+          const kept = s.section.points.filter(
+            (point) =>
+              Math.abs(
+                signedDistance(plane, resolveHostPoint(mesh, point.host)),
+              ) <= SECTION_ON_PLANE_EPSILON,
+          )
+          return {
+            section: deriveSection(s.shapeType, s.paramsByShape[s.shapeType], {
+              ...s.section,
+              enabled: false,
+              draggingPoint: false,
+              points: kept,
+            }),
+          }
+        }
+      }
+      return {
+        section: {
+          ...s.section,
+          enabled: !s.section.enabled,
+          draggingPoint: false,
+        },
+      }
+    }),
   setSectionPointDragging: (draggingPoint) =>
     set((s) => ({ section: { ...s.section, draggingPoint } })),
   clearSection: () =>
@@ -326,14 +392,26 @@ export const useStore = create<StoreState>((set, get) => ({
         generateSolid(s.shapeType, s.paramsByShape[s.shapeType]),
       )
       if (!mesh) return s
-      const section: SectionState = {
-        ...s.section,
-        points: [
-          ...s.section.points,
-          { id: s.section.nextPointId, host },
-        ],
-        nextPointId: s.section.nextPointId + 1,
-      }
+      // Toggle behaviour: clicking on (or very near) an existing point removes
+      // it instead of stacking a duplicate at the same spot.
+      const target = resolveHostPoint(mesh, host)
+      const existing = s.section.points.find(
+        (point) =>
+          distance(resolveHostPoint(mesh, point.host), target) <=
+          SECTION_DEDUP_RADIUS,
+      )
+      const section: SectionState = existing
+        ? {
+            ...s.section,
+            points: s.section.points.filter(
+              (point) => point.id !== existing.id,
+            ),
+          }
+        : {
+            ...s.section,
+            points: [...s.section.points, { id: s.section.nextPointId, host }],
+            nextPointId: s.section.nextPointId + 1,
+          }
       return {
         section: deriveSection(
           s.shapeType,
@@ -373,4 +451,24 @@ export const useStore = create<StoreState>((set, get) => ({
         appearance: { ...s.section.appearance, [key]: value },
       },
     })),
+  setSectionVertexName: (index, name) => {
+    const state = get()
+    const cornerCount = state.section.polygon.length
+    const existingNames = Array.from({ length: cornerCount }, (_, i) =>
+      i === index
+        ? null
+        : (state.section.vertexNames[i] ?? `P${i + 1}`),
+    ).filter((value): value is string => value !== null)
+    const result = validateVertexName(name, existingNames)
+    if (!result.ok) return result
+    set((s) => ({
+      section: {
+        ...s.section,
+        vertexNames: { ...s.section.vertexNames, [index]: result.value },
+      },
+    }))
+    return result
+  },
+  startEditing: (target) => set({ editing: target }),
+  stopEditing: () => set({ editing: null }),
 }))
