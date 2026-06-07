@@ -11,7 +11,9 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "lint": "eslint .",
-    "typecheck": "tsc -b && tsc -p tsconfig.test.json"
+    "typecheck": "tsc -b && tsc -p tsconfig.test.json",
+    "docker:build": "docker build -t lumos.cr.cloud.ru/stereolab:${TAG:-latest} .",
+    "docker:push": "docker push lumos.cr.cloud.ru/stereolab:${TAG:-latest}"
   },
   "dependencies": {
     "@react-three/drei": "10.7.7",

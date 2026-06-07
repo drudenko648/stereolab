@@ -1,0 +1,22 @@
+# Production deployment for Stereolab.
+# Runs the pre-built image pulled from the registry — it does not build locally.
+#
+#   docker login lumos.cr.cloud.ru
+#   TAG=v1.0.0 docker compose -f docker-compose.prod.yml pull
+#   TAG=v1.0.0 docker compose -f docker-compose.prod.yml up -d
+#
+# TAG defaults to "latest"; PORT is the host port (defaults to 8080).
+
+services:
+  web:
+    image: lumos.cr.cloud.ru/stereolab:${TAG:-latest}
+    container_name: stereolab
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:3001"
+    # The image already defines a HEALTHCHECK (see Dockerfile); Compose reports it.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
