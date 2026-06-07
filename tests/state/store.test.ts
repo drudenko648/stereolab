@@ -19,6 +19,7 @@ describe('store', () => {
     expect(s.exportNonce).toBe(0)
     expect(s.section).toMatchObject({
       enabled: false,
+      draggingPoint: false,
       points: [],
       plane: null,
       polygon: [],
@@ -178,6 +179,16 @@ describe('store', () => {
     get().toggleSectionMode()
     expect(get().section.enabled).toBe(false)
     expect(get().section.polygon).toEqual(polygon)
+  })
+
+  it('tracks section-point dragging independently from section mode', () => {
+    get().toggleSectionMode()
+    get().setSectionPointDragging(true)
+    expect(get().section.enabled).toBe(true)
+    expect(get().section.draggingPoint).toBe(true)
+
+    get().setSectionPointDragging(false)
+    expect(get().section.draggingPoint).toBe(false)
   })
 
   it('reports coincident and collinear point sets without a polygon', () => {

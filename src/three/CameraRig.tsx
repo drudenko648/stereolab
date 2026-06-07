@@ -30,7 +30,7 @@ export function CameraRig() {
   const view = useStore((s) => s.view)
   const viewNonce = useStore((s) => s.viewNonce)
   const locked = useStore((s) => s.cameraLocked)
-  const sectionEnabled = useStore((s) => s.section.enabled)
+  const sectionPointDragging = useStore((s) => s.section.draggingPoint)
 
   // Keep the latest framing radius in a ref so adjusting dimensions does not
   // snap the camera; presets/reset read it when they re-frame.
@@ -50,7 +50,7 @@ export function CameraRig() {
     <OrbitControls
       ref={controlsRef}
       makeDefault
-      enabled={!locked && !sectionEnabled}
+      enabled={!locked && !sectionPointDragging}
       target={[0, 0, 0]}
     />
   )

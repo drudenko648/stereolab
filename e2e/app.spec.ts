@@ -347,6 +347,26 @@ test('builds, drags, and exports an interactive cube section', async ({
   expect(buffer.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a')
 })
 
+test('rotates without adding a point in section mode', async ({ page }) => {
+  await page.getByRole('button', { name: strings.section.enable }).click()
+  const beforeRotate = await canvasDataUrl(page)
+  const canvasBox = await page.locator('canvas').boundingBox()
+  if (!canvasBox) throw new Error('canvas bounds unavailable')
+  const rotateStart = {
+    x: canvasBox.x + canvasBox.width / 2,
+    y: canvasBox.y + canvasBox.height / 2,
+  }
+
+  await page.mouse.move(rotateStart.x, rotateStart.y)
+  await page.mouse.down()
+  await page.mouse.move(rotateStart.x + 90, rotateStart.y + 35, { steps: 8 })
+  await page.mouse.up()
+  await page.waitForTimeout(300)
+
+  expect(await canvasDataUrl(page)).not.toBe(beforeRotate)
+  await expect(page.getByText(/Точка 1/)).toHaveCount(0)
+})
+
 test('shows curved approximation and sphere limitation', async ({ page }) => {
   await page.getByLabel(strings.panel.shape).selectOption('cylinder')
   await expect(page.getByRole('alert')).toContainText(

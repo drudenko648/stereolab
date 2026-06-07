@@ -20,6 +20,7 @@ import { v3 } from './util'
 
 const TARGET_COLOR = '#0ea5e9'
 const CONTROL_COLOR = '#f97316'
+const CLICK_DELTA = 4
 export const SECTION_EDITING_GROUP = 'section-editing-affordances'
 
 export function SectionLayer({ solid }: { solid: Solid }) {
@@ -121,7 +122,8 @@ function SectionInteractionTargets({ mesh }: { mesh: SectionMesh }) {
           geometry={vertexGeometry}
           position={v3(position)}
           renderOrder={31}
-          onPointerDown={(event) => {
+          onClick={(event) => {
+            if (event.delta > CLICK_DELTA) return
             event.stopPropagation()
             addPoint({ kind: 'vertex', vertexIndex })
           }}
@@ -145,7 +147,8 @@ function SectionInteractionTargets({ mesh }: { mesh: SectionMesh }) {
           opacity={0.14}
           depthTest={false}
           renderOrder={30}
-          onPointerDown={(event) => {
+          onClick={(event) => {
+            if (event.delta > CLICK_DELTA) return
             event.stopPropagation()
             addPoint(
               edgeHostFromPoint(
@@ -187,7 +190,8 @@ function FaceTarget({
   return (
     <mesh
       geometry={geometry}
-      onPointerDown={(event) => {
+      onClick={(event) => {
+        if (event.delta > CLICK_DELTA) return
         event.stopPropagation()
         onPlace(placementHost(mesh, faceIndex, fromThreeVector(event.point)))
       }}
@@ -213,12 +217,16 @@ function SectionControlPoint({
 }) {
   const [dragging, setDragging] = useState(false)
   const updatePoint = useStore((state) => state.updateSectionPoint)
+  const setPointDragging = useStore(
+    (state) => state.setSectionPointDragging,
+  )
   const position = resolveHostPoint(mesh, point.host)
 
   const beginDrag = (event: ThreeEvent<PointerEvent>) => {
     if (!enabled || point.host.kind === 'vertex') return
     event.stopPropagation()
     setDragging(true)
+    setPointDragging(true)
     pointerCaptureTarget(event).setPointerCapture(event.pointerId)
   }
 
@@ -240,6 +248,7 @@ function SectionControlPoint({
     if (!dragging) return
     event.stopPropagation()
     setDragging(false)
+    setPointDragging(false)
     pointerCaptureTarget(event).releasePointerCapture(event.pointerId)
   }
 

@@ -65,6 +65,7 @@ export type SectionStatus =
 
 export interface SectionState {
   enabled: boolean
+  draggingPoint: boolean
   points: readonly SectionPoint[]
   plane: SectionPlane | null
   polygon: readonly Vec3[]
@@ -108,6 +109,7 @@ export interface StoreState {
   setExportScale: (scale: ExportScale) => void
   requestExport: () => void
   toggleSectionMode: () => void
+  setSectionPointDragging: (dragging: boolean) => void
   clearSection: () => void
   addSectionPoint: (host: SectionHost) => void
   updateSectionPoint: (id: number, host: SectionHost) => void
@@ -150,6 +152,7 @@ function emptySection(
 ): SectionState {
   return {
     enabled,
+    draggingPoint: false,
     points: [],
     plane: null,
     polygon: [],
@@ -300,7 +303,15 @@ export const useStore = create<StoreState>((set, get) => ({
     set((s) => ({ exportSettings: { ...s.exportSettings, scale } })),
   requestExport: () => set((s) => ({ exportNonce: s.exportNonce + 1 })),
   toggleSectionMode: () =>
-    set((s) => ({ section: { ...s.section, enabled: !s.section.enabled } })),
+    set((s) => ({
+      section: {
+        ...s.section,
+        enabled: !s.section.enabled,
+        draggingPoint: false,
+      },
+    })),
+  setSectionPointDragging: (draggingPoint) =>
+    set((s) => ({ section: { ...s.section, draggingPoint } })),
   clearSection: () =>
     set((s) => ({
       section: deriveSection(
