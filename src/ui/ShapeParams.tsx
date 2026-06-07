@@ -15,12 +15,13 @@ export function ShapeParams() {
         const value = params[spec.key]
         const label =
           strings.params[spec.labelKey as keyof typeof strings.params]
+        const digits = spec.step >= 1 ? 0 : spec.step < 0.1 ? 2 : 1
         return (
           <label key={spec.key} className="flex flex-col gap-1 text-sm">
             <span className="flex items-baseline justify-between">
               <span>{label}</span>
               <span className="tabular-nums text-slate-500">
-                {value.toFixed(1)}
+                {value.toFixed(digits)}
               </span>
             </span>
             <input

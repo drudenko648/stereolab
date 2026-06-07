@@ -7,7 +7,7 @@ import { strings } from '../../src/ui/strings'
 const get = () => useStore.getState()
 
 describe('ControlPanel', () => {
-  it('renders all Stage 1 sections', () => {
+  it('renders all Stage 2 sections', () => {
     render(<ControlPanel />)
     for (const title of Object.values(strings.panel)) {
       expect(screen.getByText(title)).toBeInTheDocument()
@@ -34,6 +34,65 @@ describe('ControlPanel', () => {
     expect(faces).toBeChecked()
     fireEvent.click(faces)
     expect(get().display.faces).toBe(false)
+  })
+
+  it('updates all appearance controls', () => {
+    render(<ControlPanel />)
+    fireEvent.change(screen.getByLabelText(strings.appearance.figureColor), {
+      target: { value: '#123456' },
+    })
+    fireEvent.change(screen.getByLabelText(strings.appearance.faceOpacity), {
+      target: { value: '0.4' },
+    })
+    fireEvent.change(screen.getByLabelText(strings.appearance.edgeColor), {
+      target: { value: '#abcdef' },
+    })
+    fireEvent.change(screen.getByLabelText(strings.appearance.edgeWidth), {
+      target: { value: '5' },
+    })
+    fireEvent.change(screen.getByLabelText(strings.appearance.edgeStyle), {
+      target: { value: 'dashed' },
+    })
+    fireEvent.change(screen.getByLabelText(strings.appearance.vertexColor), {
+      target: { value: '#fedcba' },
+    })
+    fireEvent.change(screen.getByLabelText(strings.appearance.vertexSize), {
+      target: { value: '0.14' },
+    })
+    fireEvent.change(screen.getByLabelText(strings.appearance.labelColor), {
+      target: { value: '#334455' },
+    })
+
+    expect(get().appearance).toEqual({
+      figureColor: '#123456',
+      faceOpacity: 0.4,
+      edgeColor: '#abcdef',
+      edgeWidth: 5,
+      edgeStyle: 'dashed',
+      vertexColor: '#fedcba',
+      vertexSize: 0.14,
+      labelColor: '#334455',
+    })
+  })
+
+  it('renames a vertex, validates duplicates, and resets auto-naming', () => {
+    render(<ControlPanel />)
+    const name = screen.getByLabelText(strings.rename.name)
+    fireEvent.change(name, { target: { value: 'P' } })
+    fireEvent.click(screen.getByText(strings.rename.apply))
+    expect(get().vertexNamesByShape.cube).toEqual({ 0: 'P' })
+
+    fireEvent.change(screen.getByLabelText(strings.rename.vertex), {
+      target: { value: '1' },
+    })
+    fireEvent.change(name, { target: { value: 'P' } })
+    fireEvent.click(screen.getByText(strings.rename.apply))
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      strings.rename.errors.duplicate,
+    )
+
+    fireEvent.click(screen.getByText(strings.rename.reset))
+    expect(get().vertexNamesByShape.cube).toEqual({})
   })
 
   it('applies a quick view and toggles the lock', () => {

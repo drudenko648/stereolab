@@ -5,8 +5,10 @@
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 const SUBSCRIPT_DIGITS = ['₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉']
 
-/** Apex label for a pyramid (cone uses the same in later stages). */
+/** Shared apex label for pyramids and cones. */
 export const APEX_PYRAMID = 'S'
+export const CENTER = 'O'
+export const TOP_CENTER = `O${subscript(1)}`
 
 /** Render an integer as Unicode subscript digits, e.g. 1 → "₁", 12 → "₁₂". */
 export function subscript(n: number): string {

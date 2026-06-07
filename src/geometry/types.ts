@@ -4,8 +4,18 @@
 /** A point or vector in 3D space (Three.js Y-up convention). */
 export type Vec3 = readonly [number, number, number]
 
-/** Shape types implemented in Stage 1. Extended in later stages. */
-export type ShapeType = 'cube' | 'cuboid' | 'pyramid' | 'prism' | 'tetrahedron'
+/** All solid types available in the shape library. */
+export type ShapeType =
+  | 'cube'
+  | 'cuboid'
+  | 'pyramid'
+  | 'prism'
+  | 'tetrahedron'
+  | 'cylinder'
+  | 'cone'
+  | 'sphere'
+  | 'truncatedPyramid'
+  | 'truncatedCone'
 
 export interface Vertex {
   /** Index into Solid.vertices. */
@@ -26,12 +36,32 @@ export interface Face {
   readonly vertices: readonly number[]
 }
 
+/**
+ * Pure rendering metadata for curved solids. Three.js geometries are created
+ * from these numbers only inside src/three/.
+ */
+export type Surface =
+  | {
+      readonly kind: 'revolved'
+      readonly bottomRadius: number
+      readonly topRadius: number
+      readonly height: number
+      readonly radialSegments: number
+    }
+  | {
+      readonly kind: 'sphere'
+      readonly radius: number
+      readonly widthSegments: number
+      readonly heightSegments: number
+    }
+
 /** A solid is the complete, framework-agnostic description of a shape. */
 export interface Solid {
   readonly type: ShapeType
   readonly vertices: readonly Vertex[]
   readonly edges: readonly Edge[]
   readonly faces: readonly Face[]
+  readonly surface?: Surface
 }
 
 /** Current numeric values for a shape's parameters, keyed by ParamSpec.key. */

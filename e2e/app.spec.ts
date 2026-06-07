@@ -45,7 +45,7 @@ test('does not export on initial load', async ({ page }) => {
   expect(downloads).toBe(0)
 })
 
-test('renders every Stage 1 shape distinctly', async ({ page }) => {
+test('renders every Stage 2 shape distinctly', async ({ page }) => {
   const seen = new Set<string>()
   for (const type of SHAPE_TYPES) {
     await page.getByLabel(strings.panel.shape).selectOption(type)
@@ -55,6 +55,158 @@ test('renders every Stage 1 shape distinctly', async ({ page }) => {
   }
   // Each shape produced a different image.
   expect(seen.size).toBe(SHAPE_TYPES.length)
+})
+
+test('captures visual snapshots of every new solid', async ({ page }) => {
+  const newShapes = [
+    'cylinder',
+    'cone',
+    'sphere',
+    'truncatedPyramid',
+    'truncatedCone',
+  ] as const
+
+  for (const type of newShapes) {
+    await page.getByLabel(strings.panel.shape).selectOption(type)
+    await page.waitForTimeout(400)
+    await expect(page.locator('canvas')).toHaveScreenshot(`${type}.png`, {
+      animations: 'disabled',
+    })
+  }
+})
+
+test('appearance controls visibly change the solid', async ({ page }) => {
+  const figureColor = page.getByLabel(strings.appearance.figureColor)
+  const opacity = page.getByLabel(strings.appearance.faceOpacity)
+  const edgeColor = page.getByLabel(strings.appearance.edgeColor)
+  const edgeWidth = page.getByLabel(strings.appearance.edgeWidth)
+  const edgeStyle = page.getByLabel(strings.appearance.edgeStyle)
+  const vertexColor = page.getByLabel(strings.appearance.vertexColor)
+  const vertexSize = page.getByLabel(strings.appearance.vertexSize)
+
+  let before = await canvasDataUrl(page)
+  await figureColor.fill('#d7263d')
+  await page.waitForTimeout(200)
+  expect(await canvasDataUrl(page)).not.toBe(before)
+
+  before = await canvasDataUrl(page)
+  await opacity.fill('0.3')
+  await page.waitForTimeout(200)
+  expect(await canvasDataUrl(page)).not.toBe(before)
+
+  before = await canvasDataUrl(page)
+  await edgeColor.fill('#f59e0b')
+  await page.waitForTimeout(200)
+  expect(await canvasDataUrl(page)).not.toBe(before)
+
+  before = await canvasDataUrl(page)
+  await edgeWidth.fill('7')
+  await page.waitForTimeout(200)
+  expect(await canvasDataUrl(page)).not.toBe(before)
+
+  before = await canvasDataUrl(page)
+  await edgeStyle.selectOption('dashed')
+  await page.waitForTimeout(200)
+  expect(await canvasDataUrl(page)).not.toBe(before)
+
+  before = await canvasDataUrl(page)
+  await vertexColor.fill('#16a34a')
+  await page.waitForTimeout(200)
+  expect(await canvasDataUrl(page)).not.toBe(before)
+
+  before = await canvasDataUrl(page)
+  await vertexSize.fill('0.18')
+  await page.waitForTimeout(200)
+  expect(await canvasDataUrl(page)).not.toBe(before)
+
+  await expect(page.locator('canvas')).toHaveScreenshot('styled-cube.png', {
+    animations: 'disabled',
+  })
+})
+
+test('renames a vertex and includes the updated label in export', async ({
+  page,
+}) => {
+  const firstDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: strings.export.download }).click()
+  const beforePath = await (await firstDownload).path()
+  const before = readFileSync(beforePath)
+
+  await page.getByLabel(strings.rename.name).fill('P')
+  await page.getByRole('button', { name: strings.rename.apply }).click()
+  await expect(page.getByLabel(strings.rename.vertex)).toContainText('P')
+  await page.waitForTimeout(300)
+
+  const secondDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: strings.export.download }).click()
+  const afterPath = await (await secondDownload).path()
+  const after = readFileSync(afterPath)
+
+  expect(after.equals(before)).toBe(false)
+})
+
+test('exports styled PNGs on transparent, white and dark backgrounds', async ({
+  page,
+}) => {
+  await page.getByLabel(strings.panel.shape).selectOption('truncatedCone')
+  await page.getByLabel(strings.appearance.figureColor).fill('#d7263d')
+  await page.getByLabel(strings.appearance.edgeColor).fill('#f59e0b')
+  await page.getByLabel(strings.appearance.edgeWidth).fill('6')
+  await page.getByLabel(strings.appearance.edgeStyle).selectOption('dashed')
+
+  await page.evaluate(() => {
+    const captures: string[] = []
+    Object.defineProperty(window, '__stereolabCaptures', {
+      configurable: true,
+      value: captures,
+    })
+    HTMLAnchorElement.prototype.click = function captureExport() {
+      captures.push(this.href)
+    }
+  })
+
+  const expectedCorners = {
+    transparent: [0, 0, 0, 0],
+    white: [255, 255, 255, 255],
+    dark: [21, 23, 28, 255],
+  } as const
+
+  for (const [index, background] of (
+    ['transparent', 'white', 'dark'] as const
+  ).entries()) {
+    await page.getByLabel(strings.export.background).selectOption(background)
+    await page.getByRole('button', { name: strings.export.download }).click()
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (
+              window as unknown as Window & {
+                __stereolabCaptures: string[]
+              }
+            ).__stereolabCaptures.length,
+        ),
+      )
+      .toBe(index + 1)
+
+    const corner = await page.evaluate(async () => {
+      const captures = (
+        window as unknown as Window & {
+          __stereolabCaptures: string[]
+        }
+      ).__stereolabCaptures
+      const image = new Image()
+      image.src = captures.at(-1) ?? ''
+      await image.decode()
+      const canvas = document.createElement('canvas')
+      canvas.width = image.width
+      canvas.height = image.height
+      const context = canvas.getContext('2d')!
+      context.drawImage(image, 0, 0)
+      return Array.from(context.getImageData(0, 0, 1, 1).data)
+    })
+    expect(corner).toEqual(expectedCorners[background])
+  }
 })
 
 test('display toggles change what is drawn', async ({ page }) => {

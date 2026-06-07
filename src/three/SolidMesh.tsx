@@ -8,7 +8,7 @@ export function SolidMesh({ solid }: { solid: Solid }) {
   const color = useStore((s) => s.appearance.figureColor)
   const opacity = useStore((s) => s.appearance.faceOpacity)
 
-  const geometry = useMemo(() => buildFaceGeometry(solid), [solid])
+  const geometry = useMemo(() => buildSolidGeometry(solid), [solid])
   useEffect(() => () => geometry.dispose(), [geometry])
 
   return (
@@ -27,6 +27,27 @@ export function SolidMesh({ solid }: { solid: Solid }) {
       />
     </mesh>
   )
+}
+
+function buildSolidGeometry(solid: Solid): THREE.BufferGeometry {
+  if (solid.surface?.kind === 'revolved') {
+    return new THREE.CylinderGeometry(
+      solid.surface.topRadius,
+      solid.surface.bottomRadius,
+      solid.surface.height,
+      solid.surface.radialSegments,
+      1,
+      false,
+    )
+  }
+  if (solid.surface?.kind === 'sphere') {
+    return new THREE.SphereGeometry(
+      solid.surface.radius,
+      solid.surface.widthSegments,
+      solid.surface.heightSegments,
+    )
+  }
+  return buildFaceGeometry(solid)
 }
 
 /** Fan-triangulate each (convex) face into a non-indexed buffer geometry. */

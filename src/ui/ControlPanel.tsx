@@ -5,6 +5,8 @@ import { ShapeParams } from './ShapeParams'
 import { DisplayControls } from './DisplayControls'
 import { CameraControls } from './CameraControls'
 import { ExportControls } from './ExportControls'
+import { AppearanceControls } from './AppearanceControls'
+import { VertexRenameControls } from './VertexRenameControls'
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -35,6 +37,12 @@ export function ControlPanel() {
       </Section>
       <Section title={strings.panel.display}>
         <DisplayControls />
+      </Section>
+      <Section title={strings.panel.appearance}>
+        <AppearanceControls />
+      </Section>
+      <Section title={strings.panel.naming}>
+        <VertexRenameControls />
       </Section>
       <Section title={strings.panel.camera}>
         <CameraControls />

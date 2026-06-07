@@ -8,6 +8,7 @@ import { v3 } from './util'
 export function VertexPoints({ solid }: { solid: Solid }) {
   const color = useStore((s) => s.appearance.vertexColor)
   const size = useStore((s) => s.appearance.vertexSize)
+  const showThrough = solid.surface !== undefined
 
   // One shared sphere geometry for every vertex; rebuilt only when size changes.
   const geometry = useMemo(
@@ -19,8 +20,20 @@ export function VertexPoints({ solid }: { solid: Solid }) {
   return (
     <group>
       {solid.vertices.map((vertex) => (
-        <mesh key={vertex.id} geometry={geometry} position={v3(vertex.position)}>
-          <meshStandardMaterial color={color} metalness={0} roughness={0.6} />
+        <mesh
+          key={vertex.id}
+          geometry={geometry}
+          position={v3(vertex.position)}
+          renderOrder={showThrough ? 9 : 0}
+        >
+          <meshStandardMaterial
+            color={color}
+            metalness={0}
+            roughness={0.6}
+            depthTest={!showThrough}
+            depthWrite={!showThrough}
+            transparent={showThrough}
+          />
         </mesh>
       ))}
     </group>

@@ -1,45 +1,45 @@
 import type { Solid } from '../types'
 import { baseRingNames, topRingNames } from '../naming'
-import { makeSolid, rv } from './util'
+import { makeSolid, regularRing } from './util'
 
 export interface PrismParams {
-  /** Side length of the equilateral triangular base. */
+  /** Side length of the regular polygonal base. */
   base: number
   height: number
+  sides?: number
 }
 
-/** Triangular prism: 6 vertices, 9 edges, 5 faces. Base ABC, top A₁B₁C₁. */
-export function prism({ base, height }: PrismParams): Solid {
+/** General regular n-gon prism. Base ABC…, top A₁B₁C₁…. */
+export function prism({ base, height, sides = 3 }: PrismParams): Solid {
+  const n = Math.max(3, Math.round(sides))
   // Circumradius so the chord between adjacent vertices equals `base`.
-  const r = base / Math.sqrt(3)
+  const r = base / (2 * Math.sin(Math.PI / n))
   const y = height / 2
-  // First vertex points towards +Z; the rest are spaced 120° apart.
-  const angle = (i: number) => Math.PI / 2 + (i * 2 * Math.PI) / 3
-  const px = (i: number) => r * Math.cos(angle(i))
-  const pz = (i: number) => r * Math.sin(angle(i))
-  const [a, b, c] = baseRingNames(3)
-  const [a1, b1, c1] = topRingNames(3)
+  const bottom = regularRing(r, -y, n)
+  const top = regularRing(r, y, n)
+  const names = [...baseRingNames(n), ...topRingNames(n)]
+  const vertices = [...bottom, ...top].map((position, i) => ({
+    name: names[i],
+    position,
+  }))
+  const edges: [number, number][] = []
+  const faces: number[][] = [
+    Array.from({ length: n }, (_, i) => i),
+    Array.from({ length: n }, (_, i) => n + i),
+  ]
+
+  for (let i = 0; i < n; i++) edges.push([i, (i + 1) % n])
+  for (let i = 0; i < n; i++) edges.push([n + i, n + ((i + 1) % n)])
+  for (let i = 0; i < n; i++) edges.push([i, n + i])
+  for (let i = 0; i < n; i++) {
+    const next = (i + 1) % n
+    faces.push([i, next, n + next, n + i])
+  }
+
   return makeSolid(
     'prism',
-    [
-      rv(a, px(0), -y, pz(0)),
-      rv(b, px(1), -y, pz(1)),
-      rv(c, px(2), -y, pz(2)),
-      rv(a1, px(0), y, pz(0)),
-      rv(b1, px(1), y, pz(1)),
-      rv(c1, px(2), y, pz(2)),
-    ],
-    [
-      [0, 1], [1, 2], [2, 0], // bottom triangle
-      [3, 4], [4, 5], [5, 3], // top triangle
-      [0, 3], [1, 4], [2, 5], // vertical edges
-    ],
-    [
-      [0, 1, 2], // bottom
-      [3, 4, 5], // top
-      [0, 1, 4, 3],
-      [1, 2, 5, 4],
-      [2, 0, 3, 5],
-    ],
+    vertices,
+    edges,
+    faces,
   )
 }

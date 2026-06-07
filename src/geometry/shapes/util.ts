@@ -1,6 +1,14 @@
 // Shared helpers for the shape generators. Every generator funnels through
 // makeSolid so positioning and assembly are defined in exactly one place.
-import type { Edge, Face, Solid, ShapeType, Vec3, Vertex } from '../types'
+import type {
+  Edge,
+  Face,
+  Solid,
+  ShapeType,
+  Surface,
+  Vec3,
+  Vertex,
+} from '../types'
 
 export interface RawVertex {
   readonly name: string
@@ -22,6 +30,7 @@ export function makeSolid(
   rawVertices: readonly RawVertex[],
   edges: readonly (readonly [number, number])[],
   faces: readonly (readonly number[])[],
+  surface?: Surface,
 ): Solid {
   const centered = centerOnBoundingBox(rawVertices.map((v) => v.position))
   const vertices: Vertex[] = rawVertices.map((v, i) => ({
@@ -31,7 +40,19 @@ export function makeSolid(
   }))
   const edgeList: Edge[] = edges.map(([a, b]) => ({ a, b }))
   const faceList: Face[] = faces.map((vs) => ({ vertices: [...vs] }))
-  return { type, vertices, edges: edgeList, faces: faceList }
+  return { type, vertices, edges: edgeList, faces: faceList, surface }
+}
+
+/** Points of a regular n-gon in the horizontal XZ plane. */
+export function regularRing(
+  radius: number,
+  y: number,
+  sides: number,
+): Vec3[] {
+  return Array.from({ length: sides }, (_, i) => {
+    const angle = Math.PI / 2 + (i * 2 * Math.PI) / sides
+    return [radius * Math.cos(angle), y, radius * Math.sin(angle)]
+  })
 }
 
 /** Translate points so the centre of their axis-aligned bounding box is at 0. */

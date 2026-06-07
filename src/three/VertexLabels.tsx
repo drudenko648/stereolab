@@ -9,6 +9,22 @@ const BASE_SIZE = 0.3
 const SUB_SIZE = 0.19
 const OUTLINE = 0.018
 
+function showThroughSurfaces(text: {
+  renderOrder: number
+  material: {
+    depthTest: boolean
+    depthWrite: boolean
+    opacity: number
+    transparent: boolean
+  }
+}): void {
+  text.renderOrder = 10
+  text.material.depthTest = false
+  text.material.depthWrite = false
+  text.material.opacity = 1
+  text.material.transparent = true
+}
+
 /**
  * In-canvas vertex labels. Rendered with drei <Text> (troika) inside a
  * <Billboard> so they always face the camera AND are captured by toDataURL —
@@ -19,6 +35,7 @@ const OUTLINE = 0.018
  */
 export function VertexLabels({ solid }: { solid: Solid }) {
   const color = useStore((s) => s.appearance.labelColor)
+  const showThrough = solid.surface !== undefined
 
   return (
     <group>
@@ -32,6 +49,7 @@ export function VertexLabels({ solid }: { solid: Solid }) {
           <Billboard
             key={vertex.id}
             position={[p[0] + offset[0], p[1] + offset[1], p[2] + offset[2]]}
+            renderOrder={showThrough ? 10 : 0}
           >
             {sub === '' ? (
               <Text
@@ -41,8 +59,20 @@ export function VertexLabels({ solid }: { solid: Solid }) {
                 anchorY="middle"
                 outlineWidth={OUTLINE}
                 outlineColor="#ffffff"
+                depthOffset={showThrough ? -10 : 0}
+                onSync={showThrough ? showThroughSurfaces : undefined}
+                renderOrder={showThrough ? 10 : 0}
               >
                 {base}
+                {showThrough && (
+                  <meshBasicMaterial
+                    attach="material"
+                    color={color}
+                    depthTest={false}
+                    depthWrite={false}
+                    transparent
+                  />
+                )}
               </Text>
             ) : (
               <>
@@ -53,8 +83,20 @@ export function VertexLabels({ solid }: { solid: Solid }) {
                   anchorY="middle"
                   outlineWidth={OUTLINE}
                   outlineColor="#ffffff"
+                  depthOffset={showThrough ? -10 : 0}
+                  onSync={showThrough ? showThroughSurfaces : undefined}
+                  renderOrder={showThrough ? 10 : 0}
                 >
                   {base}
+                  {showThrough && (
+                    <meshBasicMaterial
+                      attach="material"
+                      color={color}
+                      depthTest={false}
+                      depthWrite={false}
+                      transparent
+                    />
+                  )}
                 </Text>
                 <Text
                   position={[0.03, -0.08, 0]}
@@ -64,8 +106,20 @@ export function VertexLabels({ solid }: { solid: Solid }) {
                   anchorY="middle"
                   outlineWidth={OUTLINE}
                   outlineColor="#ffffff"
+                  depthOffset={showThrough ? -10 : 0}
+                  onSync={showThrough ? showThroughSurfaces : undefined}
+                  renderOrder={showThrough ? 10 : 0}
                 >
                   {sub}
+                  {showThrough && (
+                    <meshBasicMaterial
+                      attach="material"
+                      color={color}
+                      depthTest={false}
+                      depthWrite={false}
+                      transparent
+                    />
+                  )}
                 </Text>
               </>
             )}
