@@ -19,14 +19,14 @@ export function ExportController() {
   const exportNonce = useStore((s) => s.exportNonce)
   const settings = useStore((s) => s.exportSettings)
   const shapeType = useStore((s) => s.shapeType)
-  const initialised = useRef(false)
+  // Track the last handled nonce. Initialising to the current value means a
+  // mount never triggers a capture — and, unlike a boolean "first run" flag,
+  // this stays correct under React StrictMode's double-invoked mount effects.
+  const lastExport = useRef(exportNonce)
 
   useEffect(() => {
-    // Ignore the initial mount; only act on real export requests.
-    if (!initialised.current) {
-      initialised.current = true
-      return
-    }
+    if (exportNonce === lastExport.current) return
+    lastExport.current = exportNonce
 
     const { background, scale } = settings
     const bg = backgroundSettings(background)

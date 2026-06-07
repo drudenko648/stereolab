@@ -34,3 +34,23 @@ export function topRingNames(n: number, level = 1): string[] {
   const suffix = subscript(level)
   return Array.from({ length: n }, (_, i) => letterName(i) + suffix)
 }
+
+const SUBSCRIPT_TO_DIGIT = new Map(
+  SUBSCRIPT_DIGITS.map((glyph, i) => [glyph, String(i)]),
+)
+
+/**
+ * Split a name into its base text and its subscript digits (as ordinary
+ * digits). Labels are rendered by drawing the base and a smaller, lowered
+ * subscript separately, so we never depend on the font having ₀–₉ glyphs.
+ */
+export function splitLabel(name: string): { base: string; sub: string } {
+  let base = ''
+  let sub = ''
+  for (const ch of name) {
+    const digit = SUBSCRIPT_TO_DIGIT.get(ch)
+    if (digit !== undefined) sub += digit
+    else base += ch
+  }
+  return { base, sub }
+}

@@ -36,6 +36,15 @@ test('renders the default cube', async ({ page }) => {
   expect(await nonBlankRatio(page)).toBeGreaterThan(0.02)
 })
 
+test('does not export on initial load', async ({ page }) => {
+  let downloads = 0
+  page.on('download', () => {
+    downloads++
+  })
+  await page.waitForTimeout(1000)
+  expect(downloads).toBe(0)
+})
+
 test('renders every Stage 1 shape distinctly', async ({ page }) => {
   const seen = new Set<string>()
   for (const type of SHAPE_TYPES) {
